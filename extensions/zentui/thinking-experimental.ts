@@ -548,6 +548,8 @@ function matchNativeLayout(
 ): ThinkingMarkdownLayout | undefined {
 	if (children.length !== descriptors.length) return undefined;
 	const thinking: ThinkingMarkdownMatch[] = [];
+	let nativeThinkingRun = -1;
+	let previousThinkingRun: number | undefined;
 	for (let index = 0; index < descriptors.length; index += 1) {
 		const child = children[index];
 		const descriptor = descriptors[index];
@@ -570,10 +572,15 @@ function matchNativeLayout(
 			if (!descriptor.markers.includes(marker)) return undefined;
 			continue;
 		}
+		// Pi numbers only rendered runs; structural IDs also count empty runs.
+		if (descriptor.thinkingRun !== undefined && descriptor.thinkingRun !== previousThinkingRun) {
+			nativeThinkingRun += 1;
+			previousThinkingRun = descriptor.thinkingRun;
+		}
 		// A native per-run click can hide one section while others remain decorated.
 		if (
 			descriptor.thinkingRun !== undefined &&
-			hiddenRuns?.get(descriptor.thinkingRun) === true &&
+			hiddenRuns?.get(nativeThinkingRun) === true &&
 			visible !== child &&
 			exactConstructor(visible, Text)
 		)

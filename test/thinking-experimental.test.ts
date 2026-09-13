@@ -216,13 +216,24 @@ function controller(
 }
 
 describe("Thinking (Experimental) private assistant decorator", () => {
-	it.each(["rail", "tree", "streaming"] as const)(
-		"preserves native clicks and restoration in %s",
-		(mode) => {
+	it.each(
+		(["rail", "tree", "streaming"] as const).flatMap((mode) =>
+			[false, true].map((emptyRun) => ({ mode, emptyRun })),
+		),
+	)(
+		"preserves native clicks and restoration in $mode (empty run: $emptyRun)",
+		({ mode, emptyRun }) => {
 			const assistant = component();
 			const overrides = new Map<number, boolean>();
 			Object.assign(assistant, { thinkingVisibilityOverrides: overrides });
-			const fixture = message("# Clickable step");
+			const fixture = emptyRun
+				? messageWithContent([
+						{ type: "thinking", thinking: " " },
+						{ type: "text", text: "separator" },
+						{ type: "thinking", thinking: "# Clickable step" },
+					])
+				: message("# Clickable step");
+			const childIndex = emptyRun ? 2 : 1;
 			let region: {
 				child: Component;
 				onMouse: () => { handled: boolean };
@@ -231,7 +242,7 @@ describe("Thinking (Experimental) private assistant decorator", () => {
 				invalidate: () => void;
 			};
 			installLegacyThinkingRenderer((_container, children) => {
-				const child = overrides.get(0) ? new Text("Thinking...", 1, 0) : children[1];
+				const child = overrides.get(0) ? new Text("Thinking...", 1, 0) : children[childIndex];
 				region = {
 					child,
 					onMouse() {
@@ -249,7 +260,7 @@ describe("Thinking (Experimental) private assistant decorator", () => {
 						this.child.invalidate();
 					},
 				};
-				children[1] = region;
+				children[childIndex] = region;
 			});
 			const value = controller({ enabled: true, mode });
 			value.startSession(context().ctx);
@@ -257,7 +268,7 @@ describe("Thinking (Experimental) private assistant decorator", () => {
 			for (const width of [1, 80]) {
 				const children = (assistant as unknown as { contentContainer: { children: Component[] } })
 					.contentContainer.children;
-				expect(children[1]).toBe(region!);
+				expect(children[childIndex]).toBe(region!);
 				assistant.render(width);
 				expect(region!.handleMouse()).toEqual({ handled: true });
 				expect(overrides.get(0)).toBe(true);

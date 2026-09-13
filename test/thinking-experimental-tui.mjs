@@ -250,17 +250,44 @@ function unwrapMouseRegion(component) {
 	}
 	return inner;
 }
-function assertNativeThinkingClicks(component) {
+function assertNativeThinkingClicks(component, run = 0) {
 	if (!component.thinkingVisibilityOverrides) return;
 	for (const width of [1, 80]) {
 		for (const hidden of [true, false]) {
-			const region = component.contentContainer.children.find((child) => typeof child.onMouse === "function");
+			const region = component.contentContainer.children.filter((child) => typeof child.onMouse === "function")[run];
 			if (!region) throw new Error("thinking lost its native mouse region");
 			const rows = region.render(width);
 			const result = region.handleMouse({ type: "click", button: "left", x: 0, y: 0, width, height: rows.length, shift: false, alt: false, ctrl: false });
-			if (result?.handled !== true || component.thinkingVisibilityOverrides.get(0) !== hidden)
+			if (result?.handled !== true || component.thinkingVisibilityOverrides.get(run) !== hidden)
 				throw new Error("native thinking click did not toggle visibility");
 		}
+	}
+}
+
+function assertClicksAfterEmptyThinkingRun() {
+	for (const precedingRun of [false, true]) {
+		const component = new AssistantMessageComponent(undefined, false, getMarkdownTheme(), "Thinking...", 1, []);
+		if (!component.thinkingVisibilityOverrides) return;
+		component.updateContent({
+			...fixture,
+			timestamp: fixture.timestamp - (precedingRun ? 2 : 1),
+			content: [
+				...(precedingRun ? [{ type: "thinking", thinking: "# Earlier" }, { type: "text", text: "first separator" }] : []),
+				{ type: "thinking", thinking: " " },
+				{ type: "text", text: "separator" },
+				{ type: "thinking", thinking: "# Visible after empty run" },
+			],
+		}, true);
+		const run = precedingRun ? 1 : 0;
+		const expected = mode === "streaming" ? "FoldedThinkingSection" : "ThinkingStepsRows";
+		const assertDecorated = () => {
+			const region = component.contentContainer.children.filter((child) => typeof child.onMouse === "function")[run];
+			if (unwrapMouseRegion(region)?.constructor.name !== expected)
+				throw new Error("empty-run mouse toggle disabled thinking decoration");
+		};
+		assertDecorated();
+		assertNativeThinkingClicks(component, run);
+		assertDecorated();
 	}
 }
 
@@ -329,6 +356,7 @@ let stopProbeInput;
 const ownedProbeWidgets = new Set();
 export default function (pi) {
 	pi.on("session_start", (_event, ctx) => {
+		assertClicksAfterEmptyThinkingRun();
 		const setProbeWidget = (key, factory, options) => {
 			ctx.ui.setWidget(key, factory, options);
 			if (factory) ownedProbeWidgets.add(key);
