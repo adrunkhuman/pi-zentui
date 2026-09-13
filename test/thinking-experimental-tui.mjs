@@ -250,6 +250,20 @@ function unwrapMouseRegion(component) {
 	}
 	return inner;
 }
+function assertNativeThinkingClicks(component) {
+	if (!component.thinkingVisibilityOverrides) return;
+	for (const width of [1, 80]) {
+		for (const hidden of [true, false]) {
+			const region = component.contentContainer.children.find((child) => typeof child.onMouse === "function");
+			if (!region) throw new Error("thinking lost its native mouse region");
+			const rows = region.render(width);
+			const result = region.handleMouse({ type: "click", button: "left", x: 0, y: 0, width, height: rows.length, shift: false, alt: false, ctrl: false });
+			if (result?.handled !== true || component.thinkingVisibilityOverrides.get(0) !== hidden)
+				throw new Error("native thinking click did not toggle visibility");
+		}
+	}
+}
+
 function thinkingMarkdownChild(children, snippet) {
 	return (children ?? [])
 		.map(unwrapMouseRegion)
@@ -451,13 +465,14 @@ export default function (pi) {
 					themeName: spec.themeName,
 					active: spec.active,
 					constructors: (tested.contentContainer?.children ?? []).map(
-						(child) => child.constructor.name,
+						(child) => unwrapMouseRegion(child).constructor.name,
 					),
 					comparisons: [20, 80].map((width) =>
 						compareAnsi(tested, nativeMarkdown, selected, spec.active, width),
 					),
 				};
 				structuralGenerations.push(record);
+				assertNativeThinkingClicks(tested);
 			};
 			createGeneration();
 			const hidden = new AssistantMessageComponent(
@@ -549,6 +564,7 @@ export default function (pi) {
 			messageIdentity: call.message === liveFixture,
 		}));
 		const wrapperCalls = testedCalls.length;
+		assertNativeThinkingClicks(tested);
 		const signature = (component) => (component.contentContainer?.children ?? []).map((child) => {
 			const visible = unwrapMouseRegion(child);
 			return {

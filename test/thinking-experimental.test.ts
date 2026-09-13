@@ -216,6 +216,64 @@ function controller(
 }
 
 describe("Thinking (Experimental) private assistant decorator", () => {
+	it.each(["rail", "tree", "streaming"] as const)(
+		"preserves native clicks and restoration in %s",
+		(mode) => {
+			const assistant = component();
+			const overrides = new Map<number, boolean>();
+			Object.assign(assistant, { thinkingVisibilityOverrides: overrides });
+			const fixture = message("# Clickable step");
+			let region: {
+				child: Component;
+				onMouse: () => { handled: boolean };
+				handleMouse: () => { handled: boolean };
+				render: (width: number) => string[];
+				invalidate: () => void;
+			};
+			installLegacyThinkingRenderer((_container, children) => {
+				const child = overrides.get(0) ? new Text("Thinking...", 1, 0) : children[1];
+				region = {
+					child,
+					onMouse() {
+						overrides.set(0, !overrides.get(0));
+						assistant.updateContent(fixture, false);
+						return { handled: true };
+					},
+					handleMouse() {
+						return this.onMouse();
+					},
+					render(width) {
+						return this.child.render(width);
+					},
+					invalidate() {
+						this.child.invalidate();
+					},
+				};
+				children[1] = region;
+			});
+			const value = controller({ enabled: true, mode });
+			value.startSession(context().ctx);
+			assistant.updateContent(fixture, false);
+			for (const width of [1, 80]) {
+				const children = (assistant as unknown as { contentContainer: { children: Component[] } })
+					.contentContainer.children;
+				expect(children[1]).toBe(region!);
+				assistant.render(width);
+				expect(region!.handleMouse()).toEqual({ handled: true });
+				expect(overrides.get(0)).toBe(true);
+				expect(value.state.rendererAvailable).toBe(true);
+				expect(plain(assistant.render(80)).join("\n")).toContain("Thinking...");
+				expect(region!.handleMouse()).toEqual({ handled: true });
+				expect(overrides.get(0)).toBe(false);
+				expect(value.state.active).toBe(true);
+			}
+			value.shutdown();
+			expect(region!.child).toBeInstanceOf(Markdown);
+			expect(region!.handleMouse()).toEqual({ handled: true });
+			expect(overrides.get(0)).toBe(true);
+		},
+	);
+
 	it("matches Pi 0.85 MouseRegion-wrapped thinking Markdown", () => {
 		const thinking = "# Wrapped step";
 		const markdown = new Markdown(thinking, 1, 0, markdownTheme, {
