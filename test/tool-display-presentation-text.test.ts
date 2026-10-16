@@ -9,6 +9,10 @@ const nativeRows = (text: Text, width: number) =>
 		.render(width)
 		.map((line) => (visibleWidth(line) > width ? truncateToWidth(line, width, "") : line));
 
+// Older supported Pi hosts do not expose this optional public setter.
+const nativeSetPaddingX = (Text.prototype as Text & { setPaddingX?: (paddingX: number) => void })
+	.setPaddingX;
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("PresentationText layout cache", () => {
@@ -103,12 +107,13 @@ describe("PresentationText layout cache", () => {
 		expect(text.render(80).join("\n")).not.toContain("omitted");
 	});
 
-	it("honors invalidation from inherited setPaddingX", () => {
+	it.skipIf(!nativeSetPaddingX)("honors invalidation from inherited setPaddingX", () => {
+		if (!nativeSetPaddingX) throw new Error("Native padding setter unavailable");
 		const text = new PresentationText("alpha beta\ngamma", 0, 1);
 		const native = new Text("alpha beta\ngamma", 0, 1);
 		const first = text.render(20);
-		text.setPaddingX(2);
-		native.setPaddingX(2);
+		nativeSetPaddingX.call(text, 2);
+		nativeSetPaddingX.call(native, 2);
 		const expected = nativeRows(native, 20);
 		expect(expected).not.toEqual(first);
 		expect(text.render(20)).toEqual(expected);
